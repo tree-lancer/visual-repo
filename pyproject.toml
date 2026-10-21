@@ -1,0 +1,38 @@
+[project]
+name = "visualrepo"
+version = "0.1.0"
+description = "把 Git commit 历史可视化成交互式 Voronoi 地图"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.9"
+dependencies = [
+  "fastapi>=0.110.0",
+  "uvicorn[standard]>=0.29.0",
+  "duckdb>=0.10.0",
+  "httpx>=0.27.0",
+  "requests>=2.31.0",
+  "typer>=0.12.0",
+  "rich>=13.7.0",
+]
+
+[project.scripts]
+visualrepo = "visualrepo.cli:app"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/visualrepo"]
+# 预构建前端资源目录（src/visualrepo/web）不在 VCS 里（.gitignore），
+# 发布前需先运行 scripts/build_frontend.sh 生成，再用 artifacts 强制打进 wheel。
+artifacts = ["src/visualrepo/web/**/*"]
+
+[tool.hatch.build.targets.sdist]
+include = [
+  "src/visualrepo",
+  "frontend",
+  "scripts",
+  "README.md",
+  "LICENSE",
+]

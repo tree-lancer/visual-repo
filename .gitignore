@@ -1,0 +1,26 @@
+# data
+*.duckdb
+*.duckdb.wal
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.env
+*.egg-info/
+build/
+dist/
+
+# 预构建前端资源（由 scripts/build_frontend.sh 生成，打包发布前才需要）
+src/visualrepo/web/
+
+# frontend
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# editors / os
+.DS_Store
+.vscode/
+.idea/
