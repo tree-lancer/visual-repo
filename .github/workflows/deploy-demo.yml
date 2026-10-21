@@ -3,11 +3,10 @@ name: Deploy demo to GitHub Pages
 on:
   push:
     branches: [main]
-    paths:
-      - "demo/**"
   workflow_dispatch:
 
 permissions:
+  contents: read
   pages: write
   id-token: write
 
@@ -26,6 +25,8 @@ jobs:
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
+        with:
+          enablement: true
 
       - name: Upload demo/ as Pages artifact
         uses: actions/upload-pages-artifact@v3
