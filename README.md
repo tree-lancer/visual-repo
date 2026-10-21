@@ -8,6 +8,7 @@
 
 把 Git commit 历史可视化成交互式地图，展示代码领土、贡献者占比与时间线演变。
 
+![Showcase: Apache Spark](visualrepo-display.png)
 
 ## 在线体验
 

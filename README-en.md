@@ -8,6 +8,7 @@ English | [中文](./README.md)
 
 Visualize a Git repository's commit history as an interactive map — showing code ownership, contributor footprints, and how territories shift over time.
 
+![Showcase: Apache Spark](visualrepo-display.png)
 
 ## Live demo
 
