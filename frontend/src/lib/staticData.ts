@@ -1,13 +1,11 @@
-// staticData.ts — 无后端静态 demo 模式的数据引擎
-//
-// 构建 demo 时（VITE_STATIC_MODE=true），api.ts 会把所有数据请求代理到这里。
-// 数据来源是 `visualrepo export` 产出的一组静态 JSON（见 export_snapshot.py），
-// 在浏览器端按时间窗口 / 作者筛选 / Active|LoC 模式重新聚合出 treemap，
-// 不需要任何后端查询。
-
 import type { Author, Repo, TimelinePoint, TreeNode, OwnerInfo, MapMode } from './api'
 
-const DATA_BASE = import.meta.env.BASE_URL + 'data'
+const DATA_ROOT = import.meta.env.BASE_URL + 'data'
+
+interface ManifestEntry {
+  slug: string
+  name: string
+}
 
 interface Snapshot {
   meta: {
@@ -29,25 +27,43 @@ interface Snapshot {
   profiles: Record<string, any>
 }
 
-let loaded: Promise<Snapshot> | null = null
+let manifestPromise: Promise<ManifestEntry[]> | null = null
+const snapshotCache = new Map<string, Promise<Snapshot>>()
 
-async function load(): Promise<Snapshot> {
-  if (!loaded) {
-    loaded = (async () => {
+async function loadManifest(): Promise<ManifestEntry[]> {
+  if (!manifestPromise) {
+    manifestPromise = fetchJson(`${DATA_ROOT}/manifest.json`).catch(() => {
+      // 兼容旧的单仓库 demo（没有 manifest.json，数据直接放在 data/ 下）
+      return [{ slug: '', name: 'demo' }]
+    })
+  }
+  return manifestPromise
+}
+
+function slugDir(slug: string): string {
+  return slug ? `${DATA_ROOT}/${slug}` : DATA_ROOT
+}
+
+async function load(repoId: string): Promise<Snapshot> {
+  let promise = snapshotCache.get(repoId)
+  if (!promise) {
+    const base = slugDir(repoId)
+    promise = (async () => {
       const [meta, authors, files, months, cells, locCells, timeline, profiles] = await Promise.all([
-        fetchJson(`${DATA_BASE}/meta.json`),
-        fetchJson(`${DATA_BASE}/authors.json`),
-        fetchJson(`${DATA_BASE}/files.json`),
-        fetchJson(`${DATA_BASE}/months.json`),
-        fetchJson(`${DATA_BASE}/cells.json`),
-        fetchJson(`${DATA_BASE}/loc_cells.json`),
-        fetchJson(`${DATA_BASE}/timeline.json`),
-        fetchJson(`${DATA_BASE}/profiles.json`),
+        fetchJson(`${base}/meta.json`),
+        fetchJson(`${base}/authors.json`),
+        fetchJson(`${base}/files.json`),
+        fetchJson(`${base}/months.json`),
+        fetchJson(`${base}/cells.json`),
+        fetchJson(`${base}/loc_cells.json`),
+        fetchJson(`${base}/timeline.json`),
+        fetchJson(`${base}/profiles.json`),
       ])
       return { meta, authors, files, months, cells, locCells, timeline, profiles }
     })()
+    snapshotCache.set(repoId, promise)
   }
-  return loaded
+  return promise
 }
 
 async function fetchJson(url: string) {
@@ -61,32 +77,40 @@ export function isStaticMode(): boolean {
 }
 
 export async function fetchReposStatic(): Promise<Repo[]> {
-  const snap = await load()
-  return [
-    {
-      repo_id: snap.meta.repo_id,
-      name: snap.meta.name,
-      path: `(static demo · 采样自 ${snap.meta.sample_sizes.files}/${snap.meta.real_totals.files} 文件、` +
-        `${snap.meta.sample_sizes.authors}/${snap.meta.real_totals.authors} 位作者)`,
-      commit_count: snap.meta.real_totals.commits,
-      author_count: snap.meta.real_totals.authors,
-      indexed_at: snap.meta.indexed_at,
-    },
-  ]
+  const manifest = await loadManifest()
+  const repos = await Promise.all(
+    manifest.map(async entry => {
+      try {
+        const snap = await load(entry.slug)
+        return {
+          repo_id: entry.slug || snap.meta.repo_id,
+          name: snap.meta.name,
+          path: `(static demo · 采样自 ${snap.meta.sample_sizes.files}/${snap.meta.real_totals.files} 文件、` +
+            `${snap.meta.sample_sizes.authors}/${snap.meta.real_totals.authors} 位作者)`,
+          commit_count: snap.meta.real_totals.commits,
+          author_count: snap.meta.real_totals.authors,
+          indexed_at: snap.meta.indexed_at,
+        }
+      } catch {
+        return null // 单个仓库快照缺失/加载失败不应影响其余仓库的展示
+      }
+    })
+  )
+  return repos.filter((r): r is Repo => r !== null)
 }
 
-export async function fetchAuthorsStatic(_repoId: string): Promise<Author[]> {
-  const snap = await load()
+export async function fetchAuthorsStatic(repoId: string): Promise<Author[]> {
+  const snap = await load(repoId)
   return snap.authors
 }
 
-export async function fetchTimelineStatic(_repoId: string, _emails: string[]): Promise<TimelinePoint[]> {
-  const snap = await load()
+export async function fetchTimelineStatic(repoId: string, _emails: string[]): Promise<TimelinePoint[]> {
+  const snap = await load(repoId)
   return snap.timeline
 }
 
-export async function fetchAuthorProfileStatic(_repoId: string, email: string): Promise<any | null> {
-  const snap = await load()
+export async function fetchAuthorProfileStatic(repoId: string, email: string): Promise<any | null> {
+  const snap = await load(repoId)
   return snap.profiles[email] ?? null
 }
 
@@ -95,14 +119,14 @@ function monthToTs(month: string): number {
 }
 
 export async function fetchTreemapStatic(
-  _repoId: string,
+  repoId: string,
   tsFrom: number,
   tsTo: number,
   emails: string[],
   _depth: number,
   mode: MapMode,
 ): Promise<TreeNode> {
-  const snap = await load()
+  const snap = await load(repoId)
   const highlightSet = new Set(emails)
   const filterSet = emails.length > 0 ? new Set(emails) : null
 

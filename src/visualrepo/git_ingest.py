@@ -255,6 +255,11 @@ def _bulk_load(
     if not rows:
         return
     col_list = ", ".join(columns)
+    # 显式指定 CSV 方言，不要让 DuckDB 自动嗅探：文件路径/commit message 里可能
+    # 包含逗号、引号、换行，Python csv 模块默认用双引号包裹+转义（QUOTE_MINIMAL），
+    # 但 DuckDB 的 sniffer 只采样文件开头一段，样本里偏巧没遇到足够的转义场景时
+    # 可能会错误猜成 quote=''，导致后面内容被截断（表现为该列值被错误地拆成两条）。
+    csv_opts = "FORMAT csv, HEADER false, QUOTE '\"', ESCAPE '\"', DELIM ','"
     fd, tmp_path = tempfile.mkstemp(suffix=".csv")
     try:
         with os.fdopen(fd, "w", newline="", encoding="utf-8") as f:
@@ -263,11 +268,11 @@ def _bulk_load(
         if ignore_conflicts:
             stage = f"_stage_{table}"
             con.execute(f"CREATE TEMP TABLE {stage} AS SELECT {col_list} FROM {table} WHERE FALSE")
-            con.execute(f"COPY {stage} FROM '{tmp_path}' (FORMAT csv, HEADER false)")
+            con.execute(f"COPY {stage} FROM '{tmp_path}' ({csv_opts})")
             con.execute(f"INSERT OR IGNORE INTO {table} SELECT {col_list} FROM {stage}")
             con.execute(f"DROP TABLE {stage}")
         else:
-            con.execute(f"COPY {table} ({col_list}) FROM '{tmp_path}' (FORMAT csv, HEADER false)")
+            con.execute(f"COPY {table} ({col_list}) FROM '{tmp_path}' ({csv_opts})")
     finally:
         os.unlink(tmp_path)
 
