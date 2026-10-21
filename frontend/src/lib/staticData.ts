@@ -128,21 +128,20 @@ export async function fetchTreemapStatic(
 ): Promise<TreeNode> {
   const snap = await load(repoId)
   const highlightSet = new Set(emails)
-  const filterSet = emails.length > 0 ? new Set(emails) : null
 
   const monthInRange = snap.months.map(m => {
     const ts = monthToTs(m)
     return ts >= tsFrom && ts <= tsTo
   })
 
-  // 文件级聚合：churn（窗口内）+ 各作者占比
+  // 文件级聚合：churn（窗口内）+ 各作者占比。emails 只用于下面打 highlighted
+  // 标记，不应该把其他作者的贡献从全图里过滤掉——和后端 /api/treemap 的语义一致：
+  // 选中某个人只是"在不变的全局地图上把他的领土标亮"，不是"只看他改过的文件"。
   interface FileAgg { totalChurn: number; owners: Map<number, { churn: number; touches: number }> }
   const fileAgg = new Map<number, FileAgg>()
 
   for (const [fileIdx, authorIdx, monthIdx, churn, touches] of snap.cells) {
     if (!monthInRange[monthIdx]) continue
-    const email = snap.authors[authorIdx]?.email
-    if (filterSet && (!email || !filterSet.has(email))) continue
     let agg = fileAgg.get(fileIdx)
     if (!agg) { agg = { totalChurn: 0, owners: new Map() }; fileAgg.set(fileIdx, agg) }
     agg.totalChurn += churn
